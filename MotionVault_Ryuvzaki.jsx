@@ -649,44 +649,99 @@
         exportBtn.onClick = function () { exportExpressions(); };
         importBtn.onClick = function () { importExpressions(); updateStats(); renderList(); };
 
-        // Auto-Update check
+        // Auto-Update check + Auto Install
         updateBtn.onClick = function () {
             try {
-                var tmpFile = new File(Folder.temp.absoluteURI + "/mv_version.json");
-                var url = "https://raw.githubusercontent.com/" + GITHUB_USERNAME + "/MotionVault/main/version.json";
-                var cmd = "";
-                if ($.os.indexOf("Windows") !== -1) {
-                    cmd = 'curl -s -o "' + tmpFile.fsName + '" "' + url + '"';
-                } else {
-                    cmd = 'curl -s -o "' + tmpFile.absoluteURI + '" "' + url + '"';
-                }
+                // Step 1: Download version.json
+                var tmpVersion = new File(Folder.temp.absoluteURI + "/mv_version.json");
+                var versionUrl = "https://raw.githubusercontent.com/" + GITHUB_USERNAME + "/MotionVault/main/version.json";
+                var isWin = $.os.indexOf("Windows") !== -1;
+
+                var cmd = isWin
+                    ? 'curl -s -o "' + tmpVersion.fsName + '" "' + versionUrl + '"'
+                    : 'curl -s -o "' + tmpVersion.absoluteURI + '" "' + versionUrl + '"';
+
                 system.callSystem(cmd);
-                var startTime = new Date().getTime();
-                while (new Date().getTime() - startTime < 2000) {}
-                if (tmpFile.exists) {
-                    tmpFile.open("r");
-                    var content = tmpFile.read();
-                    tmpFile.close();
-                    tmpFile.remove();
-                    var jsonStart = content.indexOf("{");
-                    if (jsonStart !== -1) {
-                        var data = eval("(" + content.substring(jsonStart) + ")");
-                        if (data.version && data.version !== CURRENT_VERSION) {
-                            var msg = "New version available!\n\nCurrent: v" + CURRENT_VERSION + "\nLatest: v" + data.version + "\n\n";
-                            if (data.changelog) msg += "What's new:\n" + data.changelog + "\n\n";
-                            msg += "Download from where you purchased MotionVault.";
-                            alert(msg);
-                        } else {
-                            alert("You are on the latest version (v" + CURRENT_VERSION + ")!");
-                        }
-                    } else {
-                        alert("Could not parse update info.\nCheck: github.com/" + GITHUB_USERNAME + "/MotionVault");
-                    }
-                } else {
-                    alert("Could not check for updates.\nCheck: github.com/" + GITHUB_USERNAME + "/MotionVault");
+
+                // Wait for file
+                var t1 = new Date().getTime();
+                while (new Date().getTime() - t1 < 2000) {}
+
+                if (!tmpVersion.exists) {
+                    alert("Could not check for updates.\nMake sure you are connected to the internet.");
+                    return;
                 }
+
+                tmpVersion.open("r");
+                var content = tmpVersion.read();
+                tmpVersion.close();
+                tmpVersion.remove();
+
+                var jsonStart = content.indexOf("{");
+                if (jsonStart === -1) {
+                    alert("Could not parse update info.");
+                    return;
+                }
+
+                var data = eval("(" + content.substring(jsonStart) + ")");
+
+                if (!data.version || data.version === CURRENT_VERSION) {
+                    alert("You are on the latest version (v" + CURRENT_VERSION + ")!");
+                    return;
+                }
+
+                // Step 2: New version found — ask to update
+                var msg = "New version available!\n\n";
+                msg += "Current: v" + CURRENT_VERSION + "\n";
+                msg += "Latest: v" + data.version + "\n\n";
+                if (data.changelog) msg += "What's new:\n" + data.changelog + "\n\n";
+                msg += "Update now automatically?";
+
+                var doUpdate = confirm(msg);
+                if (!doUpdate) return;
+
+                // Step 3: Download new .jsx file
+                updateBtn.text = "Updating...";
+                var downloadUrl = data.download || ("https://raw.githubusercontent.com/" + GITHUB_USERNAME + "/MotionVault/main/MotionVault_Ryuvzaki.jsx");
+
+                // Find current script location
+                var thisScriptFile = new File($.fileName);
+                var installPath = thisScriptFile.fsName;
+
+                var tmpJsx = new File(Folder.temp.absoluteURI + "/MotionVault_update.jsx");
+                var dlCmd = isWin
+                    ? 'curl -s -o "' + tmpJsx.fsName + '" "' + downloadUrl + '"'
+                    : 'curl -s -o "' + tmpJsx.absoluteURI + '" "' + downloadUrl + '"';
+
+                system.callSystem(dlCmd);
+
+                // Wait for download
+                var t2 = new Date().getTime();
+                while (new Date().getTime() - t2 < 4000) {}
+
+                if (!tmpJsx.exists) {
+                    updateBtn.text = "Check Update";
+                    alert("Download failed. Please try again.");
+                    return;
+                }
+
+                // Step 4: Replace current file
+                tmpJsx.open("r");
+                var newCode = tmpJsx.read();
+                tmpJsx.close();
+                tmpJsx.remove();
+
+                var installFile = new File(installPath);
+                installFile.open("w");
+                installFile.write(newCode);
+                installFile.close();
+
+                updateBtn.text = "Check Update";
+                alert("MotionVault updated to v" + data.version + "!\n\nPlease restart After Effects to apply the update.");
+
             } catch(err) {
-                alert("Update check failed: " + err.toString());
+                updateBtn.text = "Check Update";
+                alert("Update failed: " + err.toString());
             }
         };
 
