@@ -455,7 +455,7 @@
 
         tutorialBtn.onClick = function () {
             if (currentTutorialUrl !== "") {
-                try { app.system('start "" "' + currentTutorialUrl + '"'); } catch(e) {}
+                try { system.callSystem('start "" "' + currentTutorialUrl + '"'); } catch(e) {}
             }
         };
 
@@ -660,7 +660,7 @@
                 } else {
                     cmd = 'curl -s -o "' + tmpFile.absoluteURI + '" "' + url + '"';
                 }
-                app.system(cmd);
+                system.callSystem(cmd);
                 var startTime = new Date().getTime();
                 while (new Date().getTime() - startTime < 2000) {}
                 if (tmpFile.exists) {
